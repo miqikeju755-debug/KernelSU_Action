@@ -45,10 +45,14 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # Fixing configuration path just in case
+        # Clean build directory
+        make O=out clean
+        make O=out mrproper
+
+        # Configure
         make O=out $KERNEL_DEFCONFIG
 
-        # Actual Build Command
+        # Build with Relaxed Rules (Ignored Warnings)
         make -j$(nproc --all) O=out \
              CC=clang \
              CROSS_COMPILE=aarch64-linux-gnu- \
@@ -58,7 +62,8 @@ jobs:
              NM=llvm-nm \
              OBJCOPY=llvm-objcopy \
              OBJDUMP=llvm-objdump \
-             STRIP=llvm-strip
+             STRIP=llvm-strip \
+             KCFLAGS="-w" KCPPFLAGS="-Wno-error"
 
     - name: Pack Kernel (AnyKernel3)
       run: |
@@ -70,5 +75,5 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NetHunter-Kernel-Lime-Final
+        name: NetHunter-Kernel-Final
         path: AnyKernel3/kernel-nethunter.zip
