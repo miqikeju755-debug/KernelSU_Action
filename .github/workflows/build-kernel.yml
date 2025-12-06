@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       actions: write
@@ -15,7 +15,7 @@ jobs:
     - name: Setup Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git make bc bison flex build-essential libssl-dev libncurses5-dev unzip zip
+        sudo apt-get install -y git make bc bison flex build-essential libssl-dev libncurses5-dev unzip zip clang lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
     - name: Load Configuration
       run: |
@@ -26,25 +26,14 @@ jobs:
         echo "KERNEL_SOURCE_BRANCH=${KERNEL_SOURCE_BRANCH}" >> $GITHUB_ENV
         echo "KERNEL_DEFCONFIG=${KERNEL_DEFCONFIG}" >> $GITHUB_ENV
         echo "KERNEL_FILE=${KERNEL_FILE}" >> $GITHUB_ENV
-        echo "CLANG_VERSION=${CLANG_VERSION}" >> $GITHUB_ENV
-        echo "USE_KERNELSU=${USE_KERNELSU}" >> $GITHUB_ENV
 
     - name: Clone Kernel Source
       run: |
         git clone --depth=1 --branch $KERNEL_SOURCE_BRANCH $KERNEL_SOURCE android-kernel
 
-    - name: Download Clang
-      run: |
-        mkdir clang
-        cd clang
-        # Using a stable Proton Clang link compatible with Android 14/15
-        wget https://github.com/kdrag0n/proton-clang/releases/download/20230205/proton-clang-20230205.tar.zst
-        tar -I zstd -xvf proton-clang-20230205.tar.zst --strip-components=1
-        
     - name: Build Kernel
       run: |
         cd android-kernel
-        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
         export ARCH=arm64
         export SUBARCH=arm64
         
