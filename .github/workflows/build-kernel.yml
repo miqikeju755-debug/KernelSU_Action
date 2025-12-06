@@ -49,10 +49,20 @@ jobs:
         make O=out clean
         make O=out mrproper
 
-        # Configure
+        # Configure the kernel
         make O=out $KERNEL_DEFCONFIG
 
-        # Build with Relaxed Rules (Ignored Warnings)
+        # --- THE MAGIC FIX (Disable problematic checks) ---
+        echo "Disabling BTF and WERROR to fix build..."
+        # 1. Disable BTF (This causes the failure at 11 mins)
+        sed -i 's/CONFIG_DEBUG_INFO_BTF=y/CONFIG_DEBUG_INFO_BTF=n/g' out/.config
+        # 2. Disable WERROR (Ignore all warnings)
+        sed -i 's/CONFIG_WERROR=y/CONFIG_WERROR=n/g' out/.config
+        # 3. Disable Keys (Fixes certificate errors)
+        sed -i 's/CONFIG_SYSTEM_TRUSTED_KEYS=.*/CONFIG_SYSTEM_TRUSTED_KEYS=""/g' out/.config
+        sed -i 's/CONFIG_SYSTEM_REVOCATION_KEYS=.*/CONFIG_SYSTEM_REVOCATION_KEYS=""/g' out/.config
+
+        # Start Actual Build
         make -j$(nproc --all) O=out \
              CC=clang \
              CROSS_COMPILE=aarch64-linux-gnu- \
@@ -63,7 +73,7 @@ jobs:
              OBJCOPY=llvm-objcopy \
              OBJDUMP=llvm-objdump \
              STRIP=llvm-strip \
-             KCFLAGS="-w" KCPPFLAGS="-Wno-error"
+             KCFLAGS="-w"
 
     - name: Pack Kernel (AnyKernel3)
       run: |
@@ -75,5 +85,5 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NetHunter-Kernel-Final
+        name: NetHunter-Kernel-Fixed
         path: AnyKernel3/kernel-nethunter.zip
