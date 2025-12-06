@@ -15,7 +15,14 @@ jobs:
     - name: Setup Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git make bc bison flex build-essential libssl-dev libncurses5-dev unzip zip clang lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+        sudo apt-get install -y git make bc bison flex build-essential libssl-dev libncurses5-dev unzip zip
+
+    - name: Get Proton Clang
+      uses: actions/checkout@v4
+      with:
+        repository: kdrag0n/proton-clang
+        path: clang-toolchain
+        fetch-depth: 1
 
     - name: Load Configuration
       run: |
@@ -34,10 +41,14 @@ jobs:
     - name: Build Kernel
       run: |
         cd android-kernel
+        export PATH=$GITHUB_WORKSPACE/clang-toolchain/bin:$PATH
         export ARCH=arm64
         export SUBARCH=arm64
         
+        # Fixing configuration path just in case
         make O=out $KERNEL_DEFCONFIG
+
+        # Actual Build Command
         make -j$(nproc --all) O=out \
              CC=clang \
              CROSS_COMPILE=aarch64-linux-gnu- \
@@ -59,5 +70,5 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NetHunter-Kernel-Lime
+        name: NetHunter-Kernel-Lime-Final
         path: AnyKernel3/kernel-nethunter.zip
