@@ -1,4 +1,4 @@
-name: Build Kernel
+name: Build Kernel (Final Fix)
 on:
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ jobs:
     - name: Checkout Source
       uses: actions/checkout@v4
 
-    - name: Setup Environment
+    - name: Setup Tools
       run: |
         sudo apt-get update
         sudo apt-get install -y git make bc bison flex build-essential libssl-dev libncurses5-dev unzip zip
@@ -24,19 +24,10 @@ jobs:
         path: clang-toolchain
         fetch-depth: 1
 
-    - name: Load Configuration
-      run: |
-        if [ -f config.env ]; then
-          export $(cat config.env | xargs)
-        fi
-        echo "KERNEL_SOURCE=${KERNEL_SOURCE}" >> $GITHUB_ENV
-        echo "KERNEL_SOURCE_BRANCH=${KERNEL_SOURCE_BRANCH}" >> $GITHUB_ENV
-        echo "KERNEL_DEFCONFIG=${KERNEL_DEFCONFIG}" >> $GITHUB_ENV
-        echo "KERNEL_FILE=${KERNEL_FILE}" >> $GITHUB_ENV
-
     - name: Clone Kernel Source
       run: |
-        git clone --depth=1 --branch $KERNEL_SOURCE_BRANCH $KERNEL_SOURCE android-kernel
+        # এখানে আমি সরাসরি আপনার লিংক এবং ব্রাঞ্চ দিয়ে দিয়েছি
+        git clone --depth=1 --branch 14 https://github.com/hac4us06/kernel-xiaomi-electro android-kernel
 
     - name: Build Kernel
       run: |
@@ -45,45 +36,51 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # Clean build directory
+        # 1. Clean
         make O=out clean
         make O=out mrproper
 
-        # Configure the kernel
-        make O=out $KERNEL_DEFCONFIG
+        # 2. Configure (vendor/chime_defconfig)
+        make O=out vendor/chime_defconfig
 
-        # --- THE MAGIC FIX (Disable problematic checks) ---
-        echo "Disabling BTF and WERROR to fix build..."
-        # 1. Disable BTF (This causes the failure at 11 mins)
-        sed -i 's/CONFIG_DEBUG_INFO_BTF=y/CONFIG_DEBUG_INFO_BTF=n/g' out/.config
-        # 2. Disable WERROR (Ignore all warnings)
-        sed -i 's/CONFIG_WERROR=y/CONFIG_WERROR=n/g' out/.config
-        # 3. Disable Keys (Fixes certificate errors)
-        sed -i 's/CONFIG_SYSTEM_TRUSTED_KEYS=.*/CONFIG_SYSTEM_TRUSTED_KEYS=""/g' out/.config
-        sed -i 's/CONFIG_SYSTEM_REVOCATION_KEYS=.*/CONFIG_SYSTEM_REVOCATION_KEYS=""/g' out/.config
+        # 3. FORCE DISABLE ERRORS (The Magic Fix)
+        # BTF বন্ধ করা হচ্ছে (যা ১১ মিনিটে এরর দেয়)
+        scripts/config --file out/.config --disable CONFIG_DEBUG_INFO_BTF
+        # ওয়ার্নিং বন্ধ করা হচ্ছে
+        scripts/config --file out/.config --disable CONFIG_WERROR
+        # মডিউল সাইন এবং কি (Key) সমস্যা বন্ধ করা হচ্ছে
+        scripts/config --file out/.config --disable CONFIG_MODULE_SIG
+        scripts/config --file out/.config --disable CONFIG_SYSTEM_TRUSTED_KEYS
+        scripts/config --file out/.config --disable CONFIG_SYSTEM_REVOCATION_KEYS
 
-        # Start Actual Build
+        # 4. Build Start
         make -j$(nproc --all) O=out \
              CC=clang \
              CROSS_COMPILE=aarch64-linux-gnu- \
              CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-             LD=ld.lld \
-             AR=llvm-ar \
-             NM=llvm-nm \
-             OBJCOPY=llvm-objcopy \
-             OBJDUMP=llvm-objdump \
-             STRIP=llvm-strip \
+             LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
              KCFLAGS="-w"
 
-    - name: Pack Kernel (AnyKernel3)
+    - name: Smart Pack (AnyKernel3)
       run: |
         git clone https://github.com/osm0sis/AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE AnyKernel3/
+        
+        # স্মার্ট কপি: ফাইলের নাম যা-ই হোক, খুঁজে বের করে আনবে
+        echo "Looking for kernel image..."
+        find android-kernel/out/arch/arm64/boot -name "Image*" -print -exec cp {} AnyKernel3/ \;
+        
+        # যদি dtb আলাদা থাকে, সেটাও কপি করবে
+        find android-kernel/out/arch/arm64/boot -name "dtbo.img" -print -exec cp {} AnyKernel3/ \; || true
+
         cd AnyKernel3
+        # নামের ঝামেলা মেটানো (AnyKernel3 সাধারণত Image চায়)
+        mv Image.gz-dtb Image || true
+        mv Image.gz Image || true
+        
         zip -r9 kernel-nethunter.zip *
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NetHunter-Kernel-Fixed
+        name: NetHunter-Kernel-Final
         path: AnyKernel3/kernel-nethunter.zip
