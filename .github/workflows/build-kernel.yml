@@ -1,4 +1,4 @@
-name: Build Kernel (Universal Root)
+name: Build Kernel (Ultimate Fix)
 on:
   workflow_dispatch:
 
@@ -37,41 +37,55 @@ jobs:
         export KBUILD_BUILD_USER="Tamjid"
         export KBUILD_BUILD_HOST="NetHunter-Lab"
         
-        # 1. Clean
+        # 1. Clean Old Files
         make O=out clean
         make O=out mrproper
 
-        # 2. Configure
+        # 2. Load Default Config
         make O=out vendor/chime_defconfig
 
-        # --- 🛠️ ROOT SUPPORT (Magisk Delta & APatch) 🛠️ ---
-        # এই লাইনগুলো Magisk Delta এবং APatch এর জন্য জরুরি
+        # --- 🛠️ FORCE ENABLE ROOT SUPPORT (APatch & Delta) 🛠️ ---
+        # এই লাইনগুলোই আসল ম্যাজিক। এগুলো জোর করে পারমিশন অন করবে।
+        
+        # APatch এর জন্য সবচেয়ে জরুরি (আগে এটা মিসিং ছিল)
         scripts/config --file out/.config --enable CONFIG_KALLSYMS
         scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
+        scripts/config --file out/.config --enable CONFIG_KALLSYMS_ABSOLUTE_PERCPU
+        
+        # Magisk Delta / KSU এর জন্য
         scripts/config --file out/.config --enable CONFIG_KPROBES
         scripts/config --file out/.config --enable CONFIG_HAVE_KPROBES
         scripts/config --file out/.config --enable CONFIG_KPROBE_EVENTS
         scripts/config --file out/.config --enable CONFIG_OVERLAY_FS
+        
+        # ভবিষ্যতে কনফিগ দেখার জন্য
+        scripts/config --file out/.config --enable CONFIG_IKCONFIG
+        scripts/config --file out/.config --enable CONFIG_IKCONFIG_PROC
 
-        # --- 🐉 NETHUNTER FEATURES 🐉 ---
-        # HID / BadUSB Support
+        # --- 🐉 NETHUNTER FEATURES (HID & WiFi) 🐉 ---
+        # BadUSB / HID
         scripts/config --file out/.config --enable CONFIG_USB_CONFIGFS_F_HID
         scripts/config --file out/.config --enable CONFIG_USB_F_HID
         
-        # WiFi Monitor Mode Support
+        # WiFi Injection & Monitor Mode
         scripts/config --file out/.config --enable CONFIG_CFG80211
         scripts/config --file out/.config --enable CONFIG_MAC80211
         scripts/config --file out/.config --enable CONFIG_MAC80211_RC_MINSTREL
         scripts/config --file out/.config --enable CONFIG_MAC80211_RC_MINSTREL_HT
         
-        # Disable Errors
+        # CDROM / DriveDroid
+        scripts/config --file out/.config --enable CONFIG_CDROM
+        scripts/config --file out/.config --enable CONFIG_BLK_DEV_SR
+        scripts/config --file out/.config --enable CONFIG_USB_CONFIGFS_F_MASS_STORAGE
+
+        # Disable Errors to prevent build fail
         scripts/config --file out/.config --disable CONFIG_DEBUG_INFO_BTF
         scripts/config --file out/.config --disable CONFIG_WERROR
         scripts/config --file out/.config --disable CONFIG_MODULE_SIG
 
         # ---------------------------------------
 
-        # 3. Build
+        # 3. Build Now
         make -j$(nproc --all) O=out \
              CC=clang \
              CROSS_COMPILE=aarch64-linux-gnu- \
@@ -83,11 +97,11 @@ jobs:
       run: |
         git clone https://github.com/osm0sis/AnyKernel3
         
-        # Auto-create fixing script
+        # Auto-Fix Script
         rm AnyKernel3/anykernel.sh
         cat <<EOF > AnyKernel3/anykernel.sh
         properties() { '
-        kernel.string=NetHunter Kernel by Tamjid
+        kernel.string=NetHunter-Ultimate by Tamjid
         do.devicecheck=0
         do.modules=0
         do.systemless=1
@@ -111,10 +125,10 @@ jobs:
         mv Image.gz-dtb Image || true
         mv Image.gz Image || true
         
-        zip -r9 kernel-nethunter-universal.zip *
+        zip -r9 kernel-nethunter-ultimate.zip *
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NetHunter-Universal-Kernel
-        path: AnyKernel3/kernel-nethunter-universal.zip
+        name: NetHunter-Ultimate-Kernel
+        path: AnyKernel3/kernel-nethunter-ultimate.zip
