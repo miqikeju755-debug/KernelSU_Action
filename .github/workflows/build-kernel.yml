@@ -1,4 +1,4 @@
-name: Build Kernel (Ultimate Fix)
+name: Build Kernel (Force Fix APatch & Net)
 on:
   workflow_dispatch:
 
@@ -35,57 +35,41 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         export KBUILD_BUILD_USER="Tamjid"
-        export KBUILD_BUILD_HOST="NetHunter-Lab"
+        export KBUILD_BUILD_HOST="NetHunter-PC"
         
-        # 1. Clean Old Files
+        # 1. Clean Everything
         make O=out clean
         make O=out mrproper
 
-        # 2. Load Default Config
+        # --- 🔥 STEP 1: FORCE EDIT DEFCONFIG (আসল ফিক্স) 🔥 ---
+        # আমরা সরাসরি কনফিগ ফাইলে লিখে দিচ্ছি যাতে বিল্ড সিস্টেম মুছতে না পারে
+        
+        # APatch Fix (Must be 'y')
+        echo "CONFIG_KALLSYMS=y" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "CONFIG_KALLSYMS_ALL=y" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "CONFIG_KALLSYMS_ABSOLUTE_PERCPU=y" >> arch/arm64/configs/vendor/chime_defconfig
+        
+        # Magisk Delta / KSU Support
+        echo "CONFIG_KPROBES=y" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "CONFIG_OVERLAY_FS=y" >> arch/arm64/configs/vendor/chime_defconfig
+        
+        # Network Fix (Module Version Check Disable)
+        # এটি দিলে পুরনো মডিউলগুলো নতুন কার্নেলে লোড হবে (WiFi ঠিক হবে)
+        echo "CONFIG_MODVERSIONS=n" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "# CONFIG_MODULE_SIG is not set" >> arch/arm64/configs/vendor/chime_defconfig
+
+        # NetHunter HID Support
+        echo "CONFIG_USB_CONFIGFS_F_HID=y" >> arch/arm64/configs/vendor/chime_defconfig
+        echo "CONFIG_USB_F_HID=y" >> arch/arm64/configs/vendor/chime_defconfig
+
+        # -----------------------------------------------------------
+
+        # 2. Load the Modified Config
         make O=out vendor/chime_defconfig
 
-        # --- 🛠️ FORCE ENABLE ROOT SUPPORT (APatch & Delta) 🛠️ ---
-        # এই লাইনগুলোই আসল ম্যাজিক। এগুলো জোর করে পারমিশন অন করবে।
-        
-        # APatch এর জন্য সবচেয়ে জরুরি (আগে এটা মিসিং ছিল)
-        scripts/config --file out/.config --enable CONFIG_KALLSYMS
-        scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
-        scripts/config --file out/.config --enable CONFIG_KALLSYMS_ABSOLUTE_PERCPU
-        
-        # Magisk Delta / KSU এর জন্য
-        scripts/config --file out/.config --enable CONFIG_KPROBES
-        scripts/config --file out/.config --enable CONFIG_HAVE_KPROBES
-        scripts/config --file out/.config --enable CONFIG_KPROBE_EVENTS
-        scripts/config --file out/.config --enable CONFIG_OVERLAY_FS
-        
-        # ভবিষ্যতে কনফিগ দেখার জন্য
-        scripts/config --file out/.config --enable CONFIG_IKCONFIG
-        scripts/config --file out/.config --enable CONFIG_IKCONFIG_PROC
-
-        # --- 🐉 NETHUNTER FEATURES (HID & WiFi) 🐉 ---
-        # BadUSB / HID
-        scripts/config --file out/.config --enable CONFIG_USB_CONFIGFS_F_HID
-        scripts/config --file out/.config --enable CONFIG_USB_F_HID
-        
-        # WiFi Injection & Monitor Mode
-        scripts/config --file out/.config --enable CONFIG_CFG80211
-        scripts/config --file out/.config --enable CONFIG_MAC80211
-        scripts/config --file out/.config --enable CONFIG_MAC80211_RC_MINSTREL
-        scripts/config --file out/.config --enable CONFIG_MAC80211_RC_MINSTREL_HT
-        
-        # CDROM / DriveDroid
-        scripts/config --file out/.config --enable CONFIG_CDROM
-        scripts/config --file out/.config --enable CONFIG_BLK_DEV_SR
-        scripts/config --file out/.config --enable CONFIG_USB_CONFIGFS_F_MASS_STORAGE
-
-        # Disable Errors to prevent build fail
-        scripts/config --file out/.config --disable CONFIG_DEBUG_INFO_BTF
-        scripts/config --file out/.config --disable CONFIG_WERROR
-        scripts/config --file out/.config --disable CONFIG_MODULE_SIG
-
-        # ---------------------------------------
-
-        # 3. Build Now
+        # 3. Build
         make -j$(nproc --all) O=out \
              CC=clang \
              CROSS_COMPILE=aarch64-linux-gnu- \
@@ -97,11 +81,11 @@ jobs:
       run: |
         git clone https://github.com/osm0sis/AnyKernel3
         
-        # Auto-Fix Script
+        # Script Fix
         rm AnyKernel3/anykernel.sh
         cat <<EOF > AnyKernel3/anykernel.sh
         properties() { '
-        kernel.string=NetHunter-Ultimate by Tamjid
+        kernel.string=NetHunter-Fixed by Tamjid
         do.devicecheck=0
         do.modules=0
         do.systemless=1
@@ -125,10 +109,10 @@ jobs:
         mv Image.gz-dtb Image || true
         mv Image.gz Image || true
         
-        zip -r9 kernel-nethunter-ultimate.zip *
+        zip -r9 kernel-apatch-fixed.zip *
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NetHunter-Ultimate-Kernel
-        path: AnyKernel3/kernel-nethunter-ultimate.zip
+        name: APatch-Fixed-Kernel
+        path: AnyKernel3/kernel-apatch-fixed.zip
